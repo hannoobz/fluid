@@ -12,7 +12,7 @@
 #include <cstring>
 #include <algorithm>
 
-namespace flipgpu_ui {
+namespace flipcpu_ui {
 
 // ---------- font8x8_basic (public domain, Daniel Hepper / Marcel Sondaar) ----
 // Bit 0 = leftmost pixel; bit 7 = rightmost.

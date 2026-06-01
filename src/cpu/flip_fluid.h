@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace flipgpu {
+namespace flipcpu {
 
 constexpr int U_FIELD = 0;
 constexpr int V_FIELD = 1;
@@ -83,4 +83,4 @@ private:
     void setSciColor(int cellNr, float val, float minVal, float maxVal);
 };
 
-} // namespace flipgpu
+} // namespace flipcpu
