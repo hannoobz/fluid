@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace flipcpu {
+namespace flipgpu {
 
 constexpr int U_FIELD = 0;
 constexpr int V_FIELD = 1;
@@ -15,9 +15,17 @@ constexpr int FLUID_CELL = 0;
 constexpr int AIR_CELL   = 1;
 constexpr int SOLID_CELL = 2;
 
+#include <vector>
+
 class FlipFluid {
 public:
-    // Grid
+    int threads1D;
+    dim3 threads2D;
+    
+    int blocks1D_cells;
+    dim3 blocks2D_cells;
+    int blocks1D_pCells;
+
     float density;
     int   fNumX;
     int   fNumY;
@@ -29,58 +37,80 @@ public:
     std::vector<int>   cellType;
     std::vector<float> cellColor;        // 3 * fNumCells
 
-    // Particles
     int   maxParticles;
-    std::vector<float> particlePosX, particlePosY;
-    std::vector<float> particleVelX, particleVelY;
-    std::vector<float> particleColorR, particleColorG, particleColorB;
-    std::vector<float> particleDensity; // fNumCells
+    int   numParticles = 0;
     float particleRestDensity = 0.0f;
-
     float particleRadius;
     float pInvSpacing;
     int   pNumX;
     int   pNumY;
     int   pNumCells;
+    float colorDiffusionCoeff = 0.001f;
+
+    std::vector<float> particlePosX, particlePosY;
+    std::vector<float> particleVelX, particleVelY;
+    std::vector<float> particleColorR, particleColorG, particleColorB;
+    std::vector<float> particleDensity;
 
     std::vector<int> numCellParticles;
-    std::vector<int> firstCellParticle;   // pNumCells + 1
-    std::vector<int> cellParticleIds;     // maxParticles
+    std::vector<int> firstCellParticle;
+    std::vector<int> cellParticleIds;
 
-    int  numParticles = 0;
+    float* d_u;          float* d_v;
+    float* d_du;         float* d_dv;
+    float* d_prevU;      float* d_prevV;
+    float* d_p;          float* d_p_tmp;
+    float* d_s;          float* d_div;
+    float* d_cellColor;
+    int* d_cellType;
 
-    FlipFluid(float density, float width, float height,
-              float spacing, float particle_radius, int max_particles);
+    float* d_particlePosX;   float* d_particlePosY;
+    float* d_particleVelX;   float* d_particleVelY;
+    float* d_particleColorR; float* d_particleColorG; float* d_particleColorB;
+    float* d_particleDensity;
 
-    void integrateParticles(float dt, float gravity);
-    void pushParticlesApart(int numIters);
-    void handleParticleCollisions(float obstacleX, float obstacleY,
-                                  float obstacleRadius,
-                                  float obstacleVelX, float obstacleVelY);
-    void updateParticleDensity();
-    void transferVelocities(bool toGrid, float flipRatio = 0.0f);
-    void solveIncompressibility(int numIters, float dt,
-                                float overRelaxation, bool compensateDrift);
-    void updateParticleColors();
-    void updateCellColors();
+    float* d_outSum; int* d_outCount;
 
-    void simulate(float dt, float gravity, float flipRatio,
-                  int numPressureIters, int numParticleIters,
-                  float overRelaxation, bool compensateDrift,
-                  bool separateParticles,
-                  float obstacleX, float obstacleY, float obstacleRadius,
-                  float obstacleVelX, float obstacleVelY,
-                  int numSubSteps = 1);
+    int* d_numCellParticles;
+    int* d_firstCellParticle;
+    int* d_cellParticleIds;
 
-private:
-    void p2gComponent(int component);
-    void p2gNormalize(int component);
-    void g2pComponent(int component, float flipRatio);
-    void classifyCells();
-    void savePrevVelocities();
-    void restoreSolidCells();
-    float computeRestDensity();
-    void setSciColor(int cellNr, float val, float minVal, float maxVal);
+    FlipFluid(float density_, float width, float height, float spacing, 
+              float particle_radius, int max_particles, 
+              int threads_1d = 256, dim3 threads_2d = dim3(16, 16));
+    ~FlipFluid();
+
+    void uploadToGPU();
+
+    void updateColors();
+    void simulate(
+    float* d_particlePosX, float* d_particlePosY,
+    float* d_particleVelX, float* d_particleVelY,
+    float* d_particleColorR, float* d_particleColorG, float* d_particleColorB,
+    float* d_particleDensity,
+    float* d_u, float* d_v,
+    float* d_du, float* d_dv,
+    float* d_prevU, float* d_prevV,
+    float* &d_p, float* &d_p_tmp,
+    float* d_div,
+    float* d_s, float* d_cellColor,
+    int*   d_cellType,
+    int*   d_numCellParticles,
+    int*   d_firstCellParticle,
+    int*   d_cellParticleIds,
+    float  dt, float gravity, float flipRatio,
+    int    numPressureIters, int numParticleIters,
+    float  overRelaxation, bool compensateDrift,
+    bool   separateParticles,
+    float  obstacleX, float obstacleY, float obstacleRadius,
+    float  obstacleVelX, float obstacleVelY,
+    float& particleRestDensity,
+    float  density, float h, float fInvSpacing, float pInvSpacing,
+    int    fNumX, int fNumY, int fNumCells,
+    int    pNumX, int pNumY, int pNumCells,
+    int    numParticles, float particleRadius,
+    float  colorDiffusionCoeff,
+    int    numSubSteps);
 };
 
-} // namespace flipcpu
+} // namespace flipgpu

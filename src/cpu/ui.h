@@ -4,7 +4,7 @@
 
 #pragma once
 
-namespace flipcpu_ui {
+namespace flipgpu_ui {
 
 struct Input {
     int  screenW    = 0;

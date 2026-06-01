@@ -1,26 +1,26 @@
-CXX      ?= clang++
-CXXFLAGS ?= -std=c++17 -O3 -ffast-math -Wall -Wextra
+CXX      = nvcc
+CXXFLAGS = -std=c++17 -O3 --use_fast_math
 
-# GLFW (via Homebrew on macOS)
-GLFW_PREFIX := $(shell brew --prefix glfw 2>/dev/null || echo /opt/homebrew/opt/glfw)
+GLFW_PREFIX := /usr
 CXXFLAGS    += -I$(GLFW_PREFIX)/include
 LDFLAGS     += -L$(GLFW_PREFIX)/lib
 
-# macOS frameworks + GLFW
-# LIBS := -lglfw -framework OpenGL -framework Cocoa -framework IOKit
-
 LIBS = -lGLEW -lglfw -lGL -lm
 
-SRC := flip_fluid.cpp ui.cpp main.cpp
-OBJ := $(SRC:.cpp=.o)
-BIN := flip
+SRC_CU  := main.cu flip_fluid.cu
+SRC_CPP := ui.cpp
+OBJ     := $(SRC_CU:.cu=.o) $(SRC_CPP:.cpp=.o)
+BIN     := flip-gpu
 
 all: $(BIN)
 
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-%.o: %.cpp flip_fluid.h ui.h
+%.o: %.cu flip_fluid.h ui.h
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+%.o: %.cpp ui.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 clean:

@@ -24,7 +24,7 @@
 #include <cstring>
 #include <vector>
 
-using namespace flipcpu;
+using namespace flipgpu;
 
 // --------------------------- scene / config ---------------------------------
 struct Scene {
@@ -400,9 +400,9 @@ int main(int argc, char** argv) {
                                               scene.obstacleRadius);
 
         // ----- draw UI overlay -----
-        flipcpu_ui::setProjectionToPixels(s_winW, s_winH);
+        flipgpu_ui::setProjectionToPixels(s_winW, s_winH);
 
-        flipcpu_ui::Input uin;
+        flipgpu_ui::Input uin;
         uin.screenW = s_winW;
         uin.screenH = s_winH;
         uin.mouseX  = mousePxX;
@@ -410,32 +410,32 @@ int main(int argc, char** argv) {
         uin.mouseDown    = s_mouseDown;
         uin.mousePressed = s_mousePressedEdge && mouseOnPanel;
         uin.mouseReleased = s_mouseReleasedEdge;
-        flipcpu_ui::begin(uin);
+        flipgpu_ui::begin(uin);
 
-        flipcpu_ui::beginPanel(kPanelX, kPanelY, kPanelW, kPanelH, "Controls");
-        flipcpu_ui::text("FPS: %.1f", lastFps);
-        flipcpu_ui::text("Particles: %d", f.numParticles);
-        flipcpu_ui::text("Frame: %ld", scene.frameNr);
-        flipcpu_ui::checkbox("Particles",          &scene.showParticles);
-        flipcpu_ui::checkbox("Grid",               &scene.showGrid);
-        flipcpu_ui::checkbox("Compensate Drift",   &scene.compensateDrift);
-        flipcpu_ui::checkbox("Separate Particles", &scene.separateParticles);
-        if (flipcpu_ui::checkbox("Gravity", &gravityOn)) {
+        flipgpu_ui::beginPanel(kPanelX, kPanelY, kPanelW, kPanelH, "Controls");
+        flipgpu_ui::text("FPS: %.1f", lastFps);
+        flipgpu_ui::text("Particles: %d", f.numParticles);
+        flipgpu_ui::text("Frame: %ld", scene.frameNr);
+        flipgpu_ui::checkbox("Particles",          &scene.showParticles);
+        flipgpu_ui::checkbox("Grid",               &scene.showGrid);
+        flipgpu_ui::checkbox("Compensate Drift",   &scene.compensateDrift);
+        flipgpu_ui::checkbox("Separate Particles", &scene.separateParticles);
+        if (flipgpu_ui::checkbox("Gravity", &gravityOn)) {
             scene.gravity = gravityOn ? -9.81f : 0.0f;
         }
-        flipcpu_ui::slider("PIC <-> FLIP", &scene.flipRatio, 0.0f, 1.0f);
+        flipgpu_ui::slider("PIC <-> FLIP", &scene.flipRatio, 0.0f, 1.0f);
         float resFloat = (float)scene.resolution;
-        flipcpu_ui::slider("Grid Res", &resFloat, 30.0f, 200.0f);
+        flipgpu_ui::slider("Grid Res", &resFloat, 30.0f, 200.0f);
         int newRes = (int)(resFloat + 0.5f);
         if (newRes != scene.resolution) {
             scene.resolution = newRes;
             setupScene();
         }
-        flipcpu_ui::checkbox("Pause", &scene.paused);
-        if (flipcpu_ui::button("Reset")) setupScene();
-        flipcpu_ui::endPanel();
+        flipgpu_ui::checkbox("Pause", &scene.paused);
+        if (flipgpu_ui::button("Reset")) setupScene();
+        flipgpu_ui::endPanel();
 
-        flipcpu_ui::restoreProjection();
+        flipgpu_ui::restoreProjection();
 
         glfwSwapBuffers(win);
 

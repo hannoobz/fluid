@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace flipcpu {
+namespace flipgpu {
 
 static inline float clampf(float x, float lo, float hi) {
     return std::max(lo, std::min(hi, x));
@@ -560,4 +560,4 @@ void FlipFluid::simulate(float dt, float gravity, float flipRatio,
     updateCellColors();
 }
 
-} // namespace flipcpu
+} // namespace flipgpu
