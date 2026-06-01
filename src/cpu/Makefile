@@ -7,7 +7,9 @@ CXXFLAGS    += -I$(GLFW_PREFIX)/include
 LDFLAGS     += -L$(GLFW_PREFIX)/lib
 
 # macOS frameworks + GLFW
-LIBS := -lglfw -framework OpenGL -framework Cocoa -framework IOKit
+# LIBS := -lglfw -framework OpenGL -framework Cocoa -framework IOKit
+
+LIBS = -lGLEW -lglfw -lGL -lm
 
 SRC := flip_fluid.cpp ui.cpp main.cpp
 OBJ := $(SRC:.cpp=.o)
