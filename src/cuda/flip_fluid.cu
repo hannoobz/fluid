@@ -199,11 +199,11 @@ __global__ void addBlockOffsets(int* data, const int* blockSums, int n)
     if (gid + blockDim.x < n) data[gid + blockDim.x] += offset;
 }
 
-void prefixSum(const int* d_in, int* d_out, int n)
+void prefixSum(const int* d_in, int* d_out, int n, int threads1D)
 {
     if (n <= 0) return;
 
-    int threadsPerBlock = 512;
+    int threadsPerBlock = threads1D; 
     int elemsPerBlock   = threadsPerBlock * 2;
     int numBlocks       = (n + elemsPerBlock - 1) / elemsPerBlock;
     size_t sharedBytes  = elemsPerBlock * sizeof(int);
@@ -218,7 +218,7 @@ void prefixSum(const int* d_in, int* d_out, int n)
     if (numBlocks > 1) {
         int* d_scannedBlockSums;
         cudaMalloc(&d_scannedBlockSums, numBlocks * sizeof(int));
-        prefixSum(d_blockSums, d_scannedBlockSums, numBlocks);
+        prefixSum(d_blockSums, d_scannedBlockSums, numBlocks, threads1D);
 
         addBlockOffsets<<<numBlocks, threadsPerBlock>>>(
             d_out, d_scannedBlockSums, n);
@@ -389,32 +389,34 @@ __global__ void updateParticleDensity(
 
 __global__ void computeRestDensity(
     float* particleDensity, int* cellType,
-    float* outSum, int* outCount, int fNumCells)
-{
-    __shared__ float sdata[256];
-    __shared__ int   sicount[256];
+    float* outSum, int* outCount, int fNumCells){
+    __shared__ float s_sum;
+    __shared__ int   s_count;
 
-    int tid = threadIdx.x;
-    int i   = blockIdx.x * blockDim.x + threadIdx.x;
-
-    sdata[tid]   = (i < fNumCells && cellType[i] == FLUID_CELL) ? particleDensity[i] : 0.0f;
-    sicount[tid] = (i < fNumCells && cellType[i] == FLUID_CELL) ? 1 : 0;
+    if (threadIdx.x == 0) {
+        s_sum = 0.0f;
+        s_count = 0;
+    }
     __syncthreads();
 
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) {
-            sdata[tid]   += sdata[tid + stride];
-            sicount[tid] += sicount[tid + stride];
-        }
-        __syncthreads();
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    float val = 0.0f;
+    int count = 0;
+    if (i < fNumCells && cellType[i] == FLUID_CELL) {
+        val = particleDensity[i];
+        count = 1;
     }
 
-    if (tid == 0) {
-        atomicAdd(outSum,   sdata[0]);
-        atomicAdd(outCount, sicount[0]);
+    atomicAdd(&s_sum, val);
+    atomicAdd(&s_count, count);
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+        atomicAdd(outSum, s_sum);
+        atomicAdd(outCount, s_count);
     }
 }
-
 
 __global__ void classifyCells(
     int* cellType, float* s,
@@ -881,7 +883,7 @@ __global__ static void updateCellColors(
 }
 
 void FlipFluid::updateColors() {
-    int threads = 256;
+    int threads = threads1D;
     int cBlocks = (fNumCells + threads - 1) / threads;
     updateCellColors<<<cBlocks, threads>>>(
         d_cellColor, d_particleDensity,
@@ -939,7 +941,7 @@ void FlipFluid::simulate(
                     d_numCellParticles,
                     numParticles, pNumX, pNumY, pInvSpacing);
                 
-                    prefixSum(d_numCellParticles,d_firstCellParticle,pNumCells);
+                    prefixSum(d_numCellParticles,d_firstCellParticle,pNumCells, threads1D);
 
                 fillCellParticles<<<pBlocks, threads1D>>>(
                     d_particlePosX, d_particlePosY,
