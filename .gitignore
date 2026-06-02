@@ -1,0 +1,12 @@
+# Object files
+*.o
+
+# Binaries
+src/cpu/flip
+src/cuda/flip-gpu
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+*~
