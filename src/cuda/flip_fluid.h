@@ -122,7 +122,7 @@ public:
     int*   d_cellParticleIds,
     float  dt, float gravity, float flipRatio,
     int    numPressureIters, int numParticleIters,
-    float  overRelaxation, bool compensateDrift,
+    bool compensateDrift,
     bool   separateParticles,
     float  obstacleX, float obstacleY, float obstacleRadius,
     float  obstacleVelX, float obstacleVelY,

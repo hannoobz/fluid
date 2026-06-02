@@ -33,7 +33,6 @@ struct Scene {
     int   numPressureIters= 50;
     int   numParticleIters= 2;
     long  frameNr         = 0;
-    float overRelaxation  = 1.0f;
     bool  compensateDrift = true;
     bool  separateParticles = true;
     float obstacleX       = 0.0f;
@@ -135,7 +134,6 @@ static void setupTank(FlipFluid& f) {
 
 static void setupScene() {
 	scene.obstacleRadius = 0.15f;
-	scene.overRelaxation = 1.0f;
 	scene.dt = 1.0f / 60.0f;
 	scene.numParticleIters = 2;
 
@@ -441,7 +439,7 @@ int main(int argc, char** argv) {
             f.d_cellParticleIds,
             scene.dt, scene.gravity, scene.flipRatio,
             scene.numPressureIters, scene.numParticleIters,
-            scene.overRelaxation, scene.compensateDrift,
+            scene.compensateDrift,
             scene.separateParticles,
             scene.obstacleX, scene.obstacleY, scene.obstacleRadius,
             scene.obstacleVelX, scene.obstacleVelY,

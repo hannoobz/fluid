@@ -737,7 +737,7 @@ __global__ void computeDivergence(
 __global__ void jacobiMethod(
     float* p_read, float* p_write,
     float* div, float* s, int* cellType,
-    float cp, float overRelaxation, 
+    float cp, 
     int fNumX, int fNumY)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -769,7 +769,7 @@ __global__ void jacobiMethod(
                       s[top] * p_read[top] - 
                       (cp * div[center])) / sSum;
 
-    p_write[center] = (1.0f - overRelaxation) * p_read[center] + (overRelaxation * p_jacobi);
+    p_write[center] =  p_jacobi;
 }
 
 __global__ void projectVelocity(
@@ -802,7 +802,7 @@ void solveIncompressibility(
     float* d_s, float* d_particleDensity,
     int* d_cellType,
     float  density, float h, float dt,
-    float  overRelaxation, bool compensateDrift,
+    bool compensateDrift,
     float  particleRestDensity,
     int    fNumX, int fNumY, int fNumCells,
     int    numIters,
@@ -821,7 +821,7 @@ void solveIncompressibility(
     for (int iter = 0; iter < numIters; ++iter) {
         jacobiMethod<<<blocks2D_cells, threads2D>>>(
             d_p, d_p_tmp, d_div, d_s, d_cellType,
-            cp, overRelaxation, fNumX, fNumY);
+            cp, fNumX, fNumY);
 
         float* tmp = d_p;
         d_p        = d_p_tmp;
@@ -929,7 +929,7 @@ void FlipFluid::simulate(
     int*   d_cellParticleIds,
     float  dt, float gravity, float flipRatio,
     int    numPressureIters, int numParticleIters,
-    float  overRelaxation, bool compensateDrift,
+    bool compensateDrift,
     bool   separateParticles,
     float  obstacleX, float obstacleY, float obstacleRadius,
     float  obstacleVelX, float obstacleVelY,
@@ -1050,7 +1050,7 @@ void FlipFluid::simulate(
             d_prevU, d_prevV,
             d_s, d_particleDensity, d_cellType,
             density, h, sdt,
-            overRelaxation, compensateDrift,
+            compensateDrift,
             particleRestDensity,
             fNumX, fNumY, fNumCells, numPressureIters,
             threads1D, threads2D, blocks1D_cells, blocks2D_cells);
