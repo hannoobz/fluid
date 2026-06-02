@@ -246,7 +246,10 @@ static void setProjection(int w, int h) {
 }
 
 static void drawGrid(FlipFluid& f) {
+    auto t0 = std::chrono::steady_clock::now();
     cudaMemcpy(f.cellColor.data(), f.d_cellColor, 3 * f.fNumCells * sizeof(float), cudaMemcpyDeviceToHost);
+    auto t1 = std::chrono::steady_clock::now();
+    f.lastFrameStats.t10_d2h += std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     float h = f.h;
     glBegin(GL_QUADS);
@@ -269,11 +272,14 @@ static void drawGrid(FlipFluid& f) {
 }
 
 static void drawParticles(FlipFluid &f, int viewportH) {
+    auto t0 = std::chrono::steady_clock::now();
     cudaMemcpy(f.particlePosX.data(),   f.d_particlePosX,   f.numParticles * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(f.particlePosY.data(),   f.d_particlePosY,   f.numParticles * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(f.particleColorR.data(), f.d_particleColorR, f.numParticles * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(f.particleColorG.data(), f.d_particleColorG, f.numParticles * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(f.particleColorB.data(), f.d_particleColorB, f.numParticles * sizeof(float), cudaMemcpyDeviceToHost);
+    auto t1 = std::chrono::steady_clock::now();
+    f.lastFrameStats.t10_d2h += std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     float pxPerSimUnit = float(viewportH) / simHeight;
     float diameterPx = 2.0f * f.particleRadius * pxPerSimUnit;
@@ -301,6 +307,21 @@ static void drawObstacle(const FlipFluid &f, float ox, float oy, float orad) {
 }
 
 // --------------------------- main -------------------------------------------
+struct TimingAccumulator {
+    double t1_integrate = 0.0;
+    double t2_pushApart = 0.0;
+    double t3_collisions = 0.0;
+    double t4_p2g = 0.0;
+    double t5_density = 0.0;
+    double t6_pressure = 0.0;
+    double t7_g2p = 0.0;
+    double t8_colors = 0.0;
+    double t9_render = 0.0;
+    double t10_d2h = 0.0;
+    double t_total = 0.0;
+    long count = 0;
+};
+static TimingAccumulator accum;
 
 int main(int argc, char** argv) {
     bool noVsync = false;
@@ -362,6 +383,7 @@ int main(int argc, char** argv) {
     bool gravityOn = (scene.gravity != 0.0f);
 
     while (!glfwWindowShouldClose(win)) {
+        auto tFrameStart = std::chrono::steady_clock::now();
         s_mousePressedEdge = false;
         s_mouseReleasedEdge = false;
 
@@ -400,6 +422,7 @@ int main(int argc, char** argv) {
         }
 
         // ----- step -----
+        bool simulated = false;
 		if (!scene.paused) {
             f.simulate(
             f.d_particlePosX, f.d_particlePosY,
@@ -429,7 +452,8 @@ int main(int argc, char** argv) {
             f.numParticles, f.particleRadius,
             f.colorDiffusionCoeff,
             scene.numSubSteps);
-        scene.frameNr += 1;
+            scene.frameNr += 1;
+            simulated = true;
         } else {
             if (scene.frameNr == 0) {
                 f.updateColors();
@@ -438,6 +462,10 @@ int main(int argc, char** argv) {
 
 
         // ----- draw sim -----
+        f.lastFrameStats.t9_render = 0.0;
+        f.lastFrameStats.t10_d2h = 0.0;
+
+        auto tRenderStart = std::chrono::steady_clock::now();
         glClear(GL_COLOR_BUFFER_BIT);
         setProjection(s_fbW, s_fbH);
 
@@ -446,6 +474,7 @@ int main(int argc, char** argv) {
         if (scene.showObstacle)  drawObstacle(f, scene.obstacleX,
                                               scene.obstacleY,
                                               scene.obstacleRadius);
+        auto tRenderEndSim = std::chrono::steady_clock::now();
 
         // ----- draw UI overlay -----
         flipgpu_ui::setProjectionToPixels(s_winW, s_winH);
@@ -485,7 +514,48 @@ int main(int argc, char** argv) {
 
         flipgpu_ui::restoreProjection();
 
+        auto tSwapStart = std::chrono::steady_clock::now();
         glfwSwapBuffers(win);
+        auto tFrameEnd = std::chrono::steady_clock::now();
+
+        if (simulated) {
+            double t9 = std::chrono::duration<double, std::milli>(tRenderEndSim - tRenderStart).count() +
+                        std::chrono::duration<double, std::milli>(tFrameEnd - tSwapStart).count();
+            double t10 = f.lastFrameStats.t10_d2h;
+            double t_total = std::chrono::duration<double, std::milli>(tFrameEnd - tFrameStart).count();
+
+            accum.t1_integrate  += f.lastFrameStats.t1_integrate;
+            accum.t2_pushApart  += f.lastFrameStats.t2_pushApart;
+            accum.t3_collisions += f.lastFrameStats.t3_collisions;
+            accum.t4_p2g        += f.lastFrameStats.t4_p2g;
+            accum.t5_density    += f.lastFrameStats.t5_density;
+            accum.t6_pressure   += f.lastFrameStats.t6_pressure;
+            accum.t7_g2p        += f.lastFrameStats.t7_g2p;
+            accum.t8_colors     += f.lastFrameStats.t8_colors;
+            accum.t9_render     += t9;
+            accum.t10_d2h       += t10;
+            accum.t_total       += t_total;
+            accum.count         += 1;
+
+            if (accum.count >= 60) {
+                std::printf("[Timing GPU] Frame %ld | T1: %6.2f | T2: %6.2f | T3: %6.2f | T4: %6.2f | T5: %6.2f | T6: %6.2f (iters: %d) | T7: %6.2f | T8: %6.2f | T9: %6.2f | T10: %6.2f | T_total: %6.2f ms\n",
+                            scene.frameNr,
+                            accum.t1_integrate / accum.count,
+                            accum.t2_pushApart / accum.count,
+                            accum.t3_collisions / accum.count,
+                            accum.t4_p2g / accum.count,
+                            accum.t5_density / accum.count,
+                            accum.t6_pressure / accum.count,
+                            scene.numPressureIters,
+                            accum.t7_g2p / accum.count,
+                            accum.t8_colors / accum.count,
+                            accum.t9_render / accum.count,
+                            accum.t10_d2h / accum.count,
+                            accum.t_total / accum.count);
+                std::fflush(stdout);
+                accum = TimingAccumulator();
+            }
+        }
 
         // ----- fps -----
 		fpsFrames += 1;

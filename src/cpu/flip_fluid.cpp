@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 
 namespace flipcpu {
 
@@ -541,23 +542,55 @@ void FlipFluid::simulate(float dt, float gravity, float flipRatio,
                          float obstacleVelX, float obstacleVelY,
                          int numSubSteps)
 {
+    lastFrameStats = TimingStats();
     if (numSubSteps < 1) numSubSteps = 1;
     float sdt = dt / numSubSteps;
     for (int step = 0; step < numSubSteps; ++step) {
+        auto t0 = std::chrono::steady_clock::now();
         integrateParticles(sdt, gravity);
-        if (separateParticles)
+        auto t1 = std::chrono::steady_clock::now();
+        lastFrameStats.t1_integrate += std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        if (separateParticles) {
+            auto t2 = std::chrono::steady_clock::now();
             pushParticlesApart(numParticleIters);
+            auto t3 = std::chrono::steady_clock::now();
+            lastFrameStats.t2_pushApart += std::chrono::duration<double, std::milli>(t3 - t2).count();
+        }
+
+        auto t4 = std::chrono::steady_clock::now();
         handleParticleCollisions(obstacleX, obstacleY, obstacleRadius,
                                  obstacleVelX, obstacleVelY);
+        auto t5 = std::chrono::steady_clock::now();
+        lastFrameStats.t3_collisions += std::chrono::duration<double, std::milli>(t5 - t4).count();
+
+        auto t6 = std::chrono::steady_clock::now();
         transferVelocities(true);
+        auto t7 = std::chrono::steady_clock::now();
+        lastFrameStats.t4_p2g += std::chrono::duration<double, std::milli>(t7 - t6).count();
+
+        auto t8 = std::chrono::steady_clock::now();
         updateParticleDensity();
         if (particleRestDensity == 0.0f)
             particleRestDensity = computeRestDensity();
+        auto t9 = std::chrono::steady_clock::now();
+        lastFrameStats.t5_density += std::chrono::duration<double, std::milli>(t9 - t8).count();
+
+        auto t10 = std::chrono::steady_clock::now();
         solveIncompressibility(numPressureIters, sdt, overRelaxation, compensateDrift);
+        auto t11 = std::chrono::steady_clock::now();
+        lastFrameStats.t6_pressure += std::chrono::duration<double, std::milli>(t11 - t10).count();
+
+        auto t12 = std::chrono::steady_clock::now();
         transferVelocities(false, flipRatio);
+        auto t13 = std::chrono::steady_clock::now();
+        lastFrameStats.t7_g2p += std::chrono::duration<double, std::milli>(t13 - t12).count();
     }
+    auto t14 = std::chrono::steady_clock::now();
     updateParticleColors();
     updateCellColors();
+    auto t15 = std::chrono::steady_clock::now();
+    lastFrameStats.t8_colors += std::chrono::duration<double, std::milli>(t15 - t14).count();
 }
 
 } // namespace flipcpu

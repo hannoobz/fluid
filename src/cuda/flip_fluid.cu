@@ -78,9 +78,27 @@ FlipFluid::FlipFluid(float density_, float width, float height, float spacing,
     cudaMalloc(&d_numCellParticles,  pNumCells       * sizeof(int));
     cudaMalloc(&d_firstCellParticle,(pNumCells + 1)  * sizeof(int));
     cudaMalloc(&d_cellParticleIds,   maxParticles    * sizeof(int));
+
+    cudaEventCreate(&start_t1); cudaEventCreate(&stop_t1);
+    cudaEventCreate(&start_t2); cudaEventCreate(&stop_t2);
+    cudaEventCreate(&start_t3); cudaEventCreate(&stop_t3);
+    cudaEventCreate(&start_t4); cudaEventCreate(&stop_t4);
+    cudaEventCreate(&start_t5); cudaEventCreate(&stop_t5);
+    cudaEventCreate(&start_t6); cudaEventCreate(&stop_t6);
+    cudaEventCreate(&start_t7); cudaEventCreate(&stop_t7);
+    cudaEventCreate(&start_t8); cudaEventCreate(&stop_t8);
 }
 
 FlipFluid::~FlipFluid() {
+    cudaEventDestroy(start_t1); cudaEventDestroy(stop_t1);
+    cudaEventDestroy(start_t2); cudaEventDestroy(stop_t2);
+    cudaEventDestroy(start_t3); cudaEventDestroy(stop_t3);
+    cudaEventDestroy(start_t4); cudaEventDestroy(stop_t4);
+    cudaEventDestroy(start_t5); cudaEventDestroy(stop_t5);
+    cudaEventDestroy(start_t6); cudaEventDestroy(stop_t6);
+    cudaEventDestroy(start_t7); cudaEventDestroy(stop_t7);
+    cudaEventDestroy(start_t8); cudaEventDestroy(stop_t8);
+
     cudaFree(d_outSum);     cudaFree(d_outCount);
     cudaFree(d_u);          cudaFree(d_v);
     cudaFree(d_du);         cudaFree(d_dv);
@@ -919,20 +937,28 @@ void FlipFluid::simulate(
     float  colorDiffusionCoeff,
     int    numSubSteps)
 {
+    lastFrameStats = TimingStats();
     if (numSubSteps < 1) numSubSteps = 1;
     float sdt = dt / numSubSteps;
 
     int pBlocks = (numParticles + threads1D - 1) / threads1D;
 
+    float ms;
 
     for (int step = 0; step < numSubSteps; ++step) {
 
+        cudaEventRecord(start_t1, 0);
         integrateParticles<<<pBlocks, threads1D>>>(
             d_particlePosX, d_particlePosY,
             d_particleVelX, d_particleVelY,
             sdt, gravity, numParticles);
+        cudaEventRecord(stop_t1, 0);
+        cudaEventSynchronize(stop_t1);
+        cudaEventElapsedTime(&ms, start_t1, stop_t1);
+        lastFrameStats.t1_integrate += ms;
 
         if (separateParticles) {
+            cudaEventRecord(start_t2, 0);
             for (int iter = 0; iter < numParticleIters; ++iter) {
                 cudaMemset(d_numCellParticles, 0, pNumCells * sizeof(int));
 
@@ -941,7 +967,7 @@ void FlipFluid::simulate(
                     d_numCellParticles,
                     numParticles, pNumX, pNumY, pInvSpacing);
                 
-                    prefixSum(d_numCellParticles,d_firstCellParticle,pNumCells, threads1D);
+                prefixSum(d_numCellParticles,d_firstCellParticle,pNumCells, threads1D);
 
                 fillCellParticles<<<pBlocks, threads1D>>>(
                     d_particlePosX, d_particlePosY,
@@ -955,8 +981,13 @@ void FlipFluid::simulate(
                     particleRadius, pInvSpacing,
                     pNumX, pNumY, numParticles, colorDiffusionCoeff);
             }
+            cudaEventRecord(stop_t2, 0);
+            cudaEventSynchronize(stop_t2);
+            cudaEventElapsedTime(&ms, start_t2, stop_t2);
+            lastFrameStats.t2_pushApart += ms;
         }
 
+        cudaEventRecord(start_t3, 0);
         handleParticleCollisions<<<pBlocks, threads1D>>>(
             d_particlePosX, d_particlePosY,
             d_particleVelX, d_particleVelY,
@@ -964,7 +995,12 @@ void FlipFluid::simulate(
             obstacleVelX, obstacleVelY,
             fInvSpacing, particleRadius,
             fNumX, fNumY, numParticles);
+        cudaEventRecord(stop_t3, 0);
+        cudaEventSynchronize(stop_t3);
+        cudaEventElapsedTime(&ms, start_t3, stop_t3);
+        lastFrameStats.t3_collisions += ms;
 
+        cudaEventRecord(start_t4, 0);
         transferVelocities(
             d_u, d_v, d_du, d_dv, d_prevU, d_prevV,
             d_s, d_cellType,
@@ -973,7 +1009,12 @@ void FlipFluid::simulate(
             h, fInvSpacing, fNumX, fNumY, fNumCells,
             numParticles, true, 0.0f,
             threads1D, threads2D, blocks1D_cells, blocks2D_cells);
+        cudaEventRecord(stop_t4, 0);
+        cudaEventSynchronize(stop_t4);
+        cudaEventElapsedTime(&ms, start_t4, stop_t4);
+        lastFrameStats.t4_p2g += ms;
 
+        cudaEventRecord(start_t5, 0);
         cudaMemset(d_particleDensity, 0, fNumCells * sizeof(float));
         updateParticleDensity<<<pBlocks, threads1D>>>(
             d_particlePosX, d_particlePosY,
@@ -993,7 +1034,12 @@ void FlipFluid::simulate(
             cudaMemcpy(&h_count, d_outCount, sizeof(int),   cudaMemcpyDeviceToHost);
             particleRestDensity = (h_count > 0) ? (h_sum / h_count) : 0.0f;
         }
+        cudaEventRecord(stop_t5, 0);
+        cudaEventSynchronize(stop_t5);
+        cudaEventElapsedTime(&ms, start_t5, stop_t5);
+        lastFrameStats.t5_density += ms;
 
+        cudaEventRecord(start_t6, 0);
         solveIncompressibility(
             d_u, d_v, d_p, d_p_tmp,
             d_div,
@@ -1004,7 +1050,12 @@ void FlipFluid::simulate(
             particleRestDensity,
             fNumX, fNumY, fNumCells, numPressureIters,
             threads1D, threads2D, blocks1D_cells, blocks2D_cells);
+        cudaEventRecord(stop_t6, 0);
+        cudaEventSynchronize(stop_t6);
+        cudaEventElapsedTime(&ms, start_t6, stop_t6);
+        lastFrameStats.t6_pressure += ms;
 
+        cudaEventRecord(start_t7, 0);
         transferVelocities(
             d_u, d_v, d_du, d_dv, d_prevU, d_prevV,
             d_s, d_cellType,
@@ -1013,8 +1064,13 @@ void FlipFluid::simulate(
             h, fInvSpacing, fNumX, fNumY, fNumCells,
             numParticles, false, flipRatio,
             threads1D, threads2D, blocks1D_cells, blocks2D_cells);
+        cudaEventRecord(stop_t7, 0);
+        cudaEventSynchronize(stop_t7);
+        cudaEventElapsedTime(&ms, start_t7, stop_t7);
+        lastFrameStats.t7_g2p += ms;
     }
 
+    cudaEventRecord(start_t8, 0);
     updateParticleColors<<<pBlocks, threads1D>>>(
         d_particlePosX, d_particlePosY,
         d_particleColorR, d_particleColorG, d_particleColorB,
@@ -1024,6 +1080,10 @@ void FlipFluid::simulate(
     updateCellColors<<<blocks1D_cells, threads1D>>>(
         d_cellColor, d_particleDensity,
         d_cellType, particleRestDensity, fNumCells);
+    cudaEventRecord(stop_t8, 0);
+    cudaEventSynchronize(stop_t8);
+    cudaEventElapsedTime(&ms, start_t8, stop_t8);
+    lastFrameStats.t8_colors += ms;
 
 }
 

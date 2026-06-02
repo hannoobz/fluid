@@ -15,8 +15,21 @@ constexpr int FLUID_CELL = 0;
 constexpr int AIR_CELL   = 1;
 constexpr int SOLID_CELL = 2;
 
+struct TimingStats {
+    double t1_integrate = 0.0;
+    double t2_pushApart = 0.0;
+    double t3_collisions = 0.0;
+    double t4_p2g = 0.0;
+    double t5_density = 0.0;
+    double t6_pressure = 0.0;
+    double t7_g2p = 0.0;
+    double t8_colors = 0.0;
+};
+
 class FlipFluid {
 public:
+    TimingStats lastFrameStats;
+
     // Grid
     float density;
     int   fNumX;

@@ -15,10 +15,32 @@ constexpr int FLUID_CELL = 0;
 constexpr int AIR_CELL   = 1;
 constexpr int SOLID_CELL = 2;
 
-#include <vector>
+struct TimingStats {
+    double t1_integrate = 0.0;
+    double t2_pushApart = 0.0;
+    double t3_collisions = 0.0;
+    double t4_p2g = 0.0;
+    double t5_density = 0.0;
+    double t6_pressure = 0.0;
+    double t7_g2p = 0.0;
+    double t8_colors = 0.0;
+    double t9_render = 0.0;
+    double t10_d2h = 0.0;
+};
 
 class FlipFluid {
 public:
+    TimingStats lastFrameStats;
+
+    cudaEvent_t start_t1, stop_t1;
+    cudaEvent_t start_t2, stop_t2;
+    cudaEvent_t start_t3, stop_t3;
+    cudaEvent_t start_t4, stop_t4;
+    cudaEvent_t start_t5, stop_t5;
+    cudaEvent_t start_t6, stop_t6;
+    cudaEvent_t start_t7, stop_t7;
+    cudaEvent_t start_t8, stop_t8;
+
     int threads1D;
     dim3 threads2D;
     
