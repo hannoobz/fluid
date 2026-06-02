@@ -279,6 +279,9 @@ __global__ void pushParticlesApart(
 
     float px = particlePosX[i];
     float py = particlePosY[i];
+    float pcr = particleColorR[i];
+    float pcg = particleColorG[i];
+    float pcb = particleColorB[i];
 
     int pxi = (int)floorf(px * pInvSpacing);
     int pyi = (int)floorf(py * pInvSpacing);
@@ -287,8 +290,6 @@ __global__ void pushParticlesApart(
     int x1  = min(pxi + 1, pNumX - 1);
     int y1  = min(pyi + 1, pNumY - 1);
 
-    int checks = 0;
-
     for (int xi = x0; xi <= x1; ++xi) {
         for (int yi = y0; yi <= y1; ++yi) {
             int cellNr = xi * pNumY + yi;
@@ -296,7 +297,6 @@ __global__ void pushParticlesApart(
             int lastI  = firstCellParticle[cellNr + 1];
 
             for (int j = firstI; j < lastI; ++j) {
-                if (checks++ > 150) break;
 
                 int idn = cellParticleIds[j];
                 if (idn == i) continue;
@@ -313,25 +313,29 @@ __global__ void pushParticlesApart(
                 dx *= sFac;
                 dy *= sFac;
 
-                atomicAdd(&particlePosX[i], -dx);
-                atomicAdd(&particlePosY[i], -dy);
+                px -= dx;
+                py -= dy;
 
-                float c0r = particleColorR[i],   c1r = particleColorR[idn];
-                float c0g = particleColorG[i],   c1g = particleColorG[idn];
-                float c0b = particleColorB[i],   c1b = particleColorB[idn];
-                float cr  = (c0r + c1r) * 0.5f;
-                float cg  = (c0g + c1g) * 0.5f;
-                float cb  = (c0b + c1b) * 0.5f;
+                float c1r = particleColorR[idn];
+                float c1g = particleColorG[idn];
+                float c1b = particleColorB[idn];
+                
+                float cr  = (pcr + c1r) * 0.5f;
+                float cg  = (pcg + c1g) * 0.5f;
+                float cb  = (pcb + c1b) * 0.5f;
 
-                atomicAdd(&particleColorR[i], (cr - c0r) * colorDiffusionCoeff);
-                atomicAdd(&particleColorG[i], (cg - c0g) * colorDiffusionCoeff);
-                atomicAdd(&particleColorB[i], (cb - c0b) * colorDiffusionCoeff);
-
-                px = particlePosX[i];
-                py = particlePosY[i];
+                pcr += (cr - pcr) * colorDiffusionCoeff;
+                pcg += (cg - pcg) * colorDiffusionCoeff;
+                pcb += (cb - pcb) * colorDiffusionCoeff;
             }
         }
     }
+
+    particlePosX[i] = px;
+    particlePosY[i] = py;
+    particleColorR[i] = pcr;
+    particleColorG[i] = pcg;
+    particleColorB[i] = pcb;
 }
 
 __global__ void handleParticleCollisions(
