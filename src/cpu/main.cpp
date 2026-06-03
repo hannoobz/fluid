@@ -298,8 +298,11 @@ int main(int argc, char** argv) {
     bool noVsync = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--no-vsync") == 0) noVsync = true;
+        else if ((std::strcmp(argv[i], "--res") == 0 || std::strcmp(argv[i], "-r") == 0) && i + 1 < argc) {
+            scene.resolution = std::atoi(argv[++i]);
+        }
         else if (std::strcmp(argv[i], "-h") == 0 || std::strcmp(argv[i], "--help") == 0) {
-            std::printf("Usage: %s [--no-vsync]\n", argv[0]);
+            std::printf("Usage: %s [--no-vsync] [--res <resolution>]\n", argv[0]);
             std::printf("Controls: LMB=move obstacle, SPACE/P=pause, G=grid, R=reset, Q/Esc=quit\n");
             return 0;
         }
