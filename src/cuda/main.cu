@@ -30,7 +30,7 @@ struct Scene {
     float gravity         = -9.81f;
     float dt              = 1.0f / 60.0f;
     float flipRatio       = 0.9f;
-    int   numPressureIters= 50;
+    int   numPressureIters= 2500;
     int   numParticleIters= 2;
     long  frameNr         = 0;
     bool  compensateDrift = true;
@@ -44,6 +44,7 @@ struct Scene {
     float obstacleVelY    = 0.0f;
     bool  showParticles   = true;
     bool  showGrid        = false;
+    bool  debugDivergence = false;
     int   resolution      = 100;   // grid cells along the tank height
     int   numSubSteps     = 1;     // CFL substeps — auto-scaled with res
     FlipFluid* fluid      = nullptr;
@@ -143,7 +144,7 @@ static void setupScene() {
 	else if (res <= 140) scene.numSubSteps = 2;
 	else if (res <= 180) scene.numSubSteps = 3;
 	else scene.numSubSteps = 4;
-	scene.numPressureIters = 50 + std::max(0, (res - 100)) / 2;
+	scene.numPressureIters = 2500 + std::max(0, (res - 100)) / 2;
 	float tankHeight = 1.0f * simHeight;
 	float tankWidth = 1.0f * simWidth;
 	float h = tankHeight / res;
@@ -452,6 +453,36 @@ int main(int argc, char** argv) {
             scene.numSubSteps);
             scene.frameNr += 1;
             simulated = true;
+            if (scene.debugDivergence) {
+                cudaMemcpy(f.u.data(), f.d_u, f.fNumCells * sizeof(float), cudaMemcpyDeviceToHost);
+                cudaMemcpy(f.v.data(), f.d_v, f.fNumCells * sizeof(float), cudaMemcpyDeviceToHost);
+                cudaMemcpy(f.cellType.data(), f.d_cellType, f.fNumCells * sizeof(int), cudaMemcpyDeviceToHost);
+                float maxDiv = 0.0f;
+                float sumDiv = 0.0f;
+                int count = 0;
+                int n = f.fNumY;
+
+                for (int i = 1; i < f.fNumX - 1; ++i) {
+                    for (int j = 1; j < f.fNumY - 1; ++j) {
+                        if (f.cellType[i * n + j] == FLUID_CELL) {
+                            int center = i * n + j;
+                            int right  = (i + 1) * n + j;
+                            int top    = i * n + j + 1;
+                            
+                            float div = f.u[right] - f.u[center] + f.v[top] - f.v[center];
+                            float absDiv = std::abs(div);
+                            
+                            maxDiv = std::max(maxDiv, absDiv);
+                            sumDiv += absDiv;
+                            count++;
+                        }
+                    }
+                }
+
+                float avgDiv = (count > 0) ? (sumDiv / count) : 0.0f;
+                std::printf("[GPU Validation] Iters: %3d | Max Div: %.6f | Avg Div: %.6f\n", 
+                            scene.numPressureIters, maxDiv, avgDiv);
+            }
         } else {
             if (scene.frameNr == 0) {
                 f.updateColors();
@@ -495,6 +526,7 @@ int main(int argc, char** argv) {
         flipgpu_ui::checkbox("Grid",               &scene.showGrid);
         flipgpu_ui::checkbox("Compensate Drift",   &scene.compensateDrift);
         flipgpu_ui::checkbox("Separate Particles", &scene.separateParticles);
+        flipgpu_ui::checkbox("Debug Divergence",   &scene.debugDivergence);
         if (flipgpu_ui::checkbox("Gravity", &gravityOn)) {
             scene.gravity = gravityOn ? -9.81f : 0.0f;
         }

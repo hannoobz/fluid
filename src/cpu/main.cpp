@@ -46,6 +46,7 @@ struct Scene {
     float obstacleVelY    = 0.0f;
     bool  showParticles   = true;
     bool  showGrid        = false;
+    bool  debugDivergence = false;
     int   resolution      = 100;   // grid cells along the tank height
     int   numSubSteps     = 1;     // CFL substeps — auto-scaled with res
     FlipFluid* fluid      = nullptr;
@@ -404,6 +405,33 @@ int main(int argc, char** argv) {
                        scene.numSubSteps);
             scene.frameNr += 1;
             simulated = true;
+            if (scene.debugDivergence) {
+                float maxDiv = 0.0f;
+                float sumDiv = 0.0f;
+                int count = 0;
+                int n = f.fNumY;
+
+                for (int i = 1; i < f.fNumX - 1; ++i) {
+                    for (int j = 1; j < f.fNumY - 1; ++j) {
+                        if (f.cellType[i * n + j] == FLUID_CELL) {
+                            int center = i * n + j;
+                            int right  = (i + 1) * n + j;
+                            int top    = i * n + j + 1;
+                            
+                            float div = f.u[right] - f.u[center] + f.v[top] - f.v[center];
+                            float absDiv = std::abs(div);
+                            
+                            maxDiv = std::max(maxDiv, absDiv);
+                            sumDiv += absDiv;
+                            count++;
+                        }
+                    }
+                }
+
+                float avgDiv = (count > 0) ? (sumDiv / count) : 0.0f;
+                std::printf("[CPU Validation] Iters: %3d | Max Div: %.6f | Avg Div: %.6f\n", 
+                            scene.numPressureIters, maxDiv, avgDiv);
+            }
         } else {
             if (scene.frameNr == 0) f.updateCellColors();
         }
@@ -441,6 +469,7 @@ int main(int argc, char** argv) {
         flipcpu_ui::checkbox("Grid",               &scene.showGrid);
         flipcpu_ui::checkbox("Compensate Drift",   &scene.compensateDrift);
         flipcpu_ui::checkbox("Separate Particles", &scene.separateParticles);
+        flipcpu_ui::checkbox("Debug Divergence",   &scene.debugDivergence);
         if (flipcpu_ui::checkbox("Gravity", &gravityOn)) {
             scene.gravity = gravityOn ? -9.81f : 0.0f;
         }
